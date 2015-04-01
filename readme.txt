@@ -18,3 +18,5 @@ chmod +x beacon or chmod +x testScript
 
 Right now the beacon identifies by hostname. You can easily change this in the beacon itself. Change the line that looks like below to a different identifying command. Beacons can use different methods of identification so long as the resulting command has no spaces or weird characters
 	b=b=`hostname`
+	
+The beacons are Linux only and the machines need to have curl installed.
