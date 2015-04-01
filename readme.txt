@@ -20,3 +20,4 @@ Right now the beacon identifies by hostname. You can easily change this in the b
 	b=b=`hostname`
 	
 The beacons are Linux only and the machines need to have curl installed.
+This code is for research only.
